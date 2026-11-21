@@ -1,0 +1,353 @@
+                                  NAME- ABHISHEK YADAV
+                                  ROLL NO- 2026B01010831
+                                  BATCH- DATA ANALYST (BATCH 1)
+                                  EMAIL- abhishek.26b01010831@abes.ac.in
+                                  PROJECT- SHIPMENTS AND TRANSPORTATION
+
+                                  Software Requirements Specification
+                         Data Cleaning Module – Shipments & Transportation Dataset
+
+Item                | Detail
+--------------------|--------------------------------------------------------------------
+Document version    | Text document
+Date                | 20 November 2026
+Technology          | Python 3, pandas, NumPy
+Input               | shipments and transportation project.csv (2,000 rows x 15 columns)
+Output              | cleaned_shipments.csv (1,960 rows x 15 columns)
+Prepared by         | ABHISHEK YADAV
+
+1. Introduction
+1.1 Purpose
+This document specifies the requirements of the data cleaning module for the shipments and transportation dataset. It first catalogues the types of impurities found in the raw data and then defines what the cleaning module must do to remove them, so that the cleaned data can reliably feed the fuel efficiency tracker analysis.
+
+1.2 Scope
+The module reads the raw CSV, profiles it, standardises text and date formats, converts numeric fields, removes duplicates, handles missing and invalid values, and writes a cleaned CSV. Modelling, dashboards and fuel-consumption calculations are outside the scope of this document.
+
+1.3 Definitions
+Term            | Meaning
+----------------|---------------------------------------------------------------------------------------------
+Impurity        | Any defect in the raw data that reduces its accuracy, consistency or usability.
+Placeholder     | A non-value used in place of a missing entry (e.g. NA, N/A, null, ?, TBD, 0000-00-00).
+Canonical value | The single standard spelling/format chosen for a category (e.g. 'Bengaluru').
+Outlier         | A value that is technically valid but implausible for the field.
+
+2. Overall Description
+2.1 Product perspective
+The module is the first stage of the analytics pipeline: Raw CSV -> Profiling -> Cleaning -> Validation -> Cleaned CSV -> Analysis. It is a standalone Python script/notebook with no external services.
+
+2.2 User characteristics
+The user is a data analyst or student running the notebook locally with basic knowledge of Python and pandas.
+
+2.3 Operating environment
+- Python 3.9 or later
+- pandas and NumPy installed
+- Jupyter Notebook, VS Code or Google Colab
+
+3. Dataset Description
+Every column of the raw file is read as text so that no information is lost before cleaning. The target type is the type after cleaning.
+
+Column           | Raw type | Target type | Description
+-----------------|----------|-------------|----------------------------------------------------
+shipment_id      | String   | String      | Unique shipment identifier (SH#####)
+ship_date        | String   | Date        | Date the shipment left the origin
+delivery_date    | String   | Date        | Date the shipment reached the destination
+origin_city      | String   | String      | City of dispatch
+destination_city | String   | String      | City of delivery
+carrier          | String   | String      | Logistics company
+shipping_mode    | String   | String      | Road, Rail, Air or Sea
+vehicle_type     | String   | String      | Vehicle used (truck, tempo, train, plane, ship...)
+weight_kg        | String   | Float       | Shipment weight in kilograms
+freight_cost     | String   | Float       | Freight charge in INR
+payment_method   | String   | String      | How the freight was paid
+delivery_days    | String   | Float       | Days taken to deliver
+status           | String   | String      | Delivered, Delayed, In Transit, Returned, Cancelled
+driver_id        | String   | String      | Driver identifier (DRV####)
+driver_name      | String   | String      | Driver name
+
+4. Types of Impurities in the Raw Data
+The raw file (2,000 rows) was profiled column by column. The impurities fall into eight groups. Counts are the number of raw rows affected, measured on the raw file.
+
+4.1 Summary of impurity types
+# | Impurity type                             | Affected columns                                       | Rows affected
+--|-------------------------------------------|--------------------------------------------------------|------------------------------------------
+1 | Duplicate records                         | All (shipment_id)                                      | 40
+2 | Inconsistent text case and whitespace     | status, cities, carrier, mode, vehicle, payment, driver| ~ 1,000+ (status alone: 988)
+3 | Spelling variants and alternate names     | cities, carrier, vehicle_type, payment_method          | ~ 400 per column
+4 | Mixed and invalid date formats            | ship_date, delivery_date                               | ship ~ 350, delivery ~ 310 (non-blank)
+5 | Numbers stored with units / symbols       | weight_kg, freight_cost, delivery_days                 | 136 / 410 / 55
+6 | Missing values and placeholders           | Most columns                                           | See 4.2
+7 | Invalid values (negative, zero, etc.)     | weight_kg, freight_cost, delivery_days, dates          | See 4.3
+8 | Outliers and logical inconsistencies      | weight_kg, freight_cost, delivery_days, dates, driver  | See 4.3
+
+4.2 Detailed description
+Type 1 – Duplicate records: 40 rows are exact copies of other rows (the same shipment_id appears twice with identical values). Left in place they inflate shipment counts, weight and cost totals.
+Type 2 – Inconsistent case and whitespace: Includes mixed case and leading/trailing spaces across status (988 non-standard rows), cities, carrier, shipping_mode, vehicle_type, payment_method, driver_id/driver_name (145 rows), and shipment_id (23 rows).
+Type 3 – Spelling variants and alternate names: Includes city variants (Dehli/New Delhi -> Delhi, Bangalore -> Bengaluru, Bombay -> Mumbai, Madras -> Chennai, Calcutta -> Kolkata, Hydrabad -> Hyderabad, Ahmedabd -> Ahmedabad), carrier variants (Delhivary -> Delhivery, Blue Dart -> BlueDart, EcomExpress -> Ecom Express, D.T.D.C -> DTDC), vehicle variants, and payment variants.
+Type 4 – Mixed and invalid date formats: Dominant format is DD-MM-YYYY, mixed with DD-Mon-YY (e.g., '23-May-26'), '0000-00-00' placeholders, slashes like '31/02/2025', and impossible calendar dates.
+Type 5 – Numbers stored with units or symbols: Numbers embedded with units or currency symbols such as '221.3 kg' (136 rows), 'Rs. 859.21' / 'Rs. 4,120' (410 rows), and '3 days' (55 rows).
+Type 6 – Missing values and placeholders: Blanks and placeholders (NA, N/A, null, ?, TBD, unknown, 0000-00-00) across ship_date, delivery_date, destination_city, vehicle_type, weight_kg, freight_cost, payment_method, delivery_days, driver_id, and driver_name.
+
+4.3 Invalid values, outliers and inconsistencies
+Type / Check                  | Problem / Finding                                          | Rows
+------------------------------|------------------------------------------------------------|--------------
+Type 7 – Negative weight      | weight_kg below 0                                          | 16
+Type 7 – Negative cost        | freight_cost below 0                                       | 24
+Type 7 – Negative days        | delivery_days below 0 (min -2)                             | 15
+Type 7 – Zero days            | delivery_days equal to 0                                   | 13
+Type 8 – Extreme weight       | weight_kg above 5,000 (max 569,100)                        | 71
+Type 8 – Extreme cost         | freight_cost above Rs. 100,000 (max Rs. 1,628,018)         | 53
+Type 8 – Extreme delivery time| delivery_days above 60 (max 99)                            | 13
+Type 8 – Date order           | delivery_date earlier than ship_date                       | 54
+Type 8 – Driver identity      | Same driver_id linked to multiple driver_name values       | 76 driver IDs
+
+5. Functional Requirements
+ID    | Requirement                                                                                               | Addresses
+------|-----------------------------------------------------------------------------------------------------------|----------
+FR-01 | Load the raw CSV with every column as text (dtype=str) and report row and column counts.                  | —
+FR-02 | Profile the data: missing counts, unique values per categorical column, numeric ranges.                   | All
+FR-03 | Strip leading/trailing whitespace from all text columns.                                                  | Type 2
+FR-04 | Standardise case: upper-case IDs, title-case categories, per-column canonical form.                       | Type 2
+FR-05 | Map spelling variants and alternate names to canonical values with a dictionary.                          | Type 3
+FR-06 | Replace placeholders (NA, N/A, null, ?, TBD, unknown, 0000-00-00) with NaN.                               | Type 6
+FR-07 | Parse all date formats into one datetime format; invalid dates become NaT.                                | Type 4
+FR-08 | Strip units and currency symbols and thousands separators, then convert to float.                         | Type 5
+FR-09 | Set negative or zero weight, cost and delivery days to NaN.                                               | Type 7
+FR-10 | Remove exact duplicate rows, keeping the first occurrence.                                                | Type 1
+FR-11 | Flag outliers (IQR or fixed business limits) in a separate column or log, for review.                     | Type 8
+FR-12 | Flag rows where delivery_date < ship_date and recompute delivery_days from valid dates where possible.    | Type 8
+FR-13 | Resolve driver_id to driver_name conflicts (most frequent name per ID).                                   | Type 8
+FR-14 | Handle remaining missing values: leave as NaN or impute with the median per carrier and mode, as documented.| Type 6
+FR-15 | Write the cleaned data to cleaned_shipments.csv and a short cleaning log (rows before/after, fixes per rule).| —
+
+6. Data Requirements for the Cleaned Output
+- shipment_id is unique and upper-case.
+- ship_date and delivery_date are valid dates in ISO format (YYYY-MM-DD) or empty.
+- Categorical columns contain only canonical values (10 cities, 5 carriers, 4 modes, 5 statuses).
+- weight_kg, freight_cost and delivery_days are numeric (float) and positive, or empty.
+- driver_id follows the DRV#### pattern or is empty.
+- No placeholder strings remain anywhere in the file.
+
+7. Non-Functional Requirements
+ID     | Category        | Requirement
+-------|-----------------|-------------------------------------------------------------------------------
+NFR-01 | Reproducibility | Running the script on the same raw file always produces the same output.
+NFR-02 | Traceability    | The raw file is never overwritten; every rule logs how many rows it changed.
+NFR-03 | Performance     | Clean the 2,000-row file in under 10 seconds on a standard laptop.
+NFR-04 | Maintainability | Mapping dictionaries are kept in one place so new variants can be added easily.
+NFR-05 | Usability       | The script is organised into clearly named, commented steps.
+
+8. Cleaning Outcome Summary
+Measure                               | Raw file                  | Cleaned file
+--------------------------------------|---------------------------|----------------------------------------------
+Rows                                  | 2,000                     | 1,960 (40 duplicates removed)
+Columns                               | 15                        | 15+ (with derived analysis & summary outputs)
+Date columns                          | Text, mixed formats       | Date type, consistent parsed format
+weight_kg, freight_cost, delivery_days| Text with units/symbols   | Numeric (float)
+Negative / zero numeric values        | 55 negative, 13 zero days | None (cleaned / imputed)
+Cities, carriers, modes, statuses     | Dozens of variants        | Standardised canonical categories
+
+9. Assumptions, Constraints and Future Work
+- Dates are day-first (DD-MM-YYYY); freight cost is in Indian rupees.
+- A missing delivery date is acceptable for In Transit and Cancelled shipments.
+- Rail Wagon / Air Cargo versus Freight Train / Cargo Plane need a business decision on whether they are the same vehicle class.
+- Outlier thresholds (for example weight above 5,000 kg) are initial limits and should be confirmed with domain knowledge.
+
+================================================================================
+PYTHON CODE - SHIPMENT & TRANSPORTATION ANALYSIS SCRIPT
+================================================================================
+
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+
+# 1. LOAD DATA
+file_name = "shipments and transportation project.csv"
+df = pd.read_csv(file_name)
+print("Raw data shape:", df.shape)
+
+# 2. CLEAN DATA
+df = df.drop_duplicates(subset=["shipment_id"]).copy()
+
+# Clean text columns and handle placeholder values like '?'
+text_cols = [
+    "origin_city",
+    "destination_city",
+    "carrier",
+    "shipping_mode",
+    "vehicle_type",
+    "payment_method",
+    "status",
+]
+for col in text_cols:
+  df[col] = df[col].astype(str).str.strip()
+  df.loc[df[col].isin(["nan", "None", "?", ""]), col] = np.nan
+
+# Standardize city, carrier, mode, status, and payment labels
+city_map = {
+    "madras": "Chennai",
+    "ahmedabd": "Ahmedabad",
+    "delhi": "Delhi",
+    "mumbai": "Mumbai",
+    "bengaluru": "Bengaluru",
+    "chennai": "Chennai",
+    "kolkata": "Kolkata",
+    "hyderabad": "Hyderabad",
+    "pune": "Pune",
+    "jaipur": "Jaipur",
+    "lucknow": "Lucknow",
+}
+for col in ["origin_city", "destination_city"]:
+  df[col] = df[col].apply(
+      lambda x: city_map.get(x.lower(), x.title()) if pd.notna(x) else x
+  )
+
+carrier_map = {
+    "dtdc": "DTDC",
+    "d.t.d.c": "DTDC",
+    "gati": "Gati",
+    "bluedart": "BlueDart",
+    "blue dart": "BlueDart",
+    "delhivery": "Delhivery",
+    "delhivary": "Delhivery",
+    "ecom express": "Ecom Express",
+    "ecomexpress": "Ecom Express",
+}
+df["carrier"] = df["carrier"].apply(
+    lambda x: carrier_map.get(x.lower(), x.title()) if pd.notna(x) else x
+)
+df["shipping_mode"] = df["shipping_mode"].str.title()
+df["status"] = df["status"].str.title()
+
+payment_map = {
+    "upi": "UPI",
+    "u.p.i": "UPI",
+    "cod": "COD",
+    "c.o.d": "COD",
+    "cash on delivery": "COD",
+    "prepaid": "Prepaid",
+    "pre-paid": "Prepaid",
+    "credit (net 30)": "Credit (Net 30)",
+    "net 30": "Credit (Net 30)",
+    "credit": "Credit (Net 30)",
+    "bank transfer": "Bank Transfer",
+}
+df["payment_method"] = df["payment_method"].apply(
+    lambda x: payment_map.get(x.lower(), x.title()) if pd.notna(x) else x
+)
+
+# Remove units/symbols (like 'kg', 'Rs.', '₹', ',', 'days') and convert to numbers
+for col in ["weight_kg", "freight_cost", "delivery_days"]:
+  df[col] = pd.to_numeric(
+      df[col].astype(str).str.replace(r"[^\d.-]", "", regex=True), errors="coerce"
+  )
+
+# Remove negative/invalid values and cap extreme outliers at the 99th percentile
+df.loc[df["weight_kg"] <= 0, "weight_kg"] = np.nan
+df.loc[df["freight_cost"] <= 0, "freight_cost"] = np.nan
+df.loc[(df["delivery_days"] <= 0) | (df["delivery_days"] > 60), "delivery_days"] = (
+    np.nan
+)
+
+df["weight_kg"] = df["weight_kg"].clip(upper=df["weight_kg"].quantile(0.99))
+df["freight_cost"] = df["freight_cost"].clip(
+    upper=df["freight_cost"].quantile(0.99)
+)
+
+# Parse dates and estimate missing delivery_days from ship_date & delivery_date
+df["ship_date"] = pd.to_datetime(
+    df["ship_date"], format="mixed", dayfirst=True, errors="coerce"
+)
+df["delivery_date"] = pd.to_datetime(
+    df["delivery_date"], format="mixed", dayfirst=True, errors="coerce"
+)
+
+calc_days = (df["delivery_date"] - df["ship_date"]).dt.days
+df["delivery_days"] = df["delivery_days"].fillna(
+    calc_days.where((calc_days > 0) & (calc_days <= 60))
+)
+
+# Fill remaining missing values with median (numbers) or mode (categories)
+for col in ["weight_kg", "freight_cost", "delivery_days"]:
+  df[col] = df[col].fillna(df[col].median())
+
+for col in ["destination_city", "vehicle_type", "payment_method"]:
+  df[col] = df[col].fillna(df[col].mode()[0])
+
+# Create helpful logistics features
+df["cost_per_kg"] = (df["freight_cost"] / df["weight_kg"]).round(2)
+df["route"] = df["origin_city"] + " -> " + df["destination_city"]
+
+# EXPORT CLEANED DATASET
+df.to_csv("cleaned_shipments.csv", index=False)
+print("Cleaned data shape:", df.shape)
+print("Saved cleaned dataset to 'cleaned_shipments.csv'")
+
+# 3. TRANSPORTATION & LOGISTICS ANALYSIS
+print("\n--- 1. SHIPMENT STATUS & DELAY RATE ---")
+print(df["status"].value_counts())
+print(f"Delivery Rate: {(df['status'] == 'Delivered').mean() * 100:.1f}%")
+print(f"Delay Rate:    {(df['status'] == 'Delayed').mean() * 100:.1f}%")
+
+print("\n--- 2. CARRIER PERFORMANCE ---")
+carrier_perf = (
+    df.groupby("carrier")
+    .agg(
+        shipments=("shipment_id", "count"),
+        avg_cost=("freight_cost", "mean"),
+        avg_days=("delivery_days", "mean"),
+        delay_pct=("status", lambda s: (s == "Delayed").mean() * 100),
+    )
+    .round(2)
+)
+print(carrier_perf)
+
+print("\n--- 3. SHIPPING MODE EFFICIENCY ---")
+mode_perf = (
+    df.groupby("shipping_mode")
+    .agg(
+        shipments=("shipment_id", "count"),
+        avg_weight_kg=("weight_kg", "mean"),
+        avg_cost_per_kg=("cost_per_kg", "mean"),
+        avg_days=("delivery_days", "mean"),
+    )
+    .round(2)
+)
+print(mode_perf)
+
+print("\n--- 4. TOP 5 BUSIEST ROUTES ---")
+print(df["route"].value_counts().head(5))
+
+print("\n--- 5. PAYMENT METHOD BREAKDOWN ---")
+print(df["payment_method"].value_counts())
+
+# 4. VISUALIZATION (2x2 CHART DASHBOARD)
+fig, axes = plt.subplots(2, 2, figsize=(13, 9))
+fig.suptitle(
+    "Shipment & Transportation Analysis Overview", fontsize=14, fontweight="bold"
+)
+
+df["status"].value_counts().plot(kind="bar", ax=axes[0, 0], color="steelblue")
+axes[0, 0].set_title("Shipments by Status")
+axes[0, 0].set_ylabel("Number of Shipments")
+axes[0, 0].tick_params(axis="x", rotation=20)
+
+carrier_perf["avg_cost"].sort_values().plot(
+    kind="barh", ax=axes[0, 1], color="teal"
+)
+axes[0, 1].set_title("Average Freight Cost by Carrier")
+axes[0, 1].set_xlabel("Average Freight Cost")
+
+mode_perf["avg_days"].sort_values().plot(kind="bar", ax=axes[1, 0], color="coral")
+axes[1, 0].set_title("Average Delivery Days by Mode")
+axes[1, 0].set_ylabel("Average Days")
+axes[1, 0].tick_params(axis="x", rotation=0)
+
+df["route"].value_counts().head(5).sort_values().plot(
+    kind="barh", ax=axes[1, 1], color="slateblue"
+)
+axes[1, 1].set_title("Top 5 Shipment Routes")
+axes[1, 1].set_xlabel("Number of Shipments")
+
+plt.tight_layout(rect=[0, 0, 1, 0.95])
+plt.savefig("shipment_analysis_dashboard.png", dpi=150)
+plt.show()
